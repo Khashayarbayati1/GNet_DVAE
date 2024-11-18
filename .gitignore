@@ -1,0 +1,18 @@
+# Ignore Python virtual environments
+.env/
+venv/
+
+# Ignore datasets and large files
+dataset/
+*.h5
+*.ckpt
+*.pkl
+
+# Ignore temporary files and logs
+*.log
+__pycache__/
+*.pyc
+*.ipynb_checkpoints/
+
+# Ignore system files
+.DS_Store
