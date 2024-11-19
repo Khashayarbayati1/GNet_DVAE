@@ -185,7 +185,7 @@ class STORNTrainer:
         if self.data_name == 'AR':
             self.x_2d = 4
             self.y_2d = 4
-            self.num_samples = 10000
+            self.num_samples = 2000
             self.ar_order = 10
             self.load_AR_data()
         elif self.data_name == 'RAF':
