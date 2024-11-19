@@ -16,7 +16,7 @@ module load python/3.12
 module load cuda/12.2
 
 # Activate the virtual environment
-source /home/khbayati/envs/gndvae/bin/activate
+source ~/envs/nov_24/bin/activate
 
 # Navigate to the project directory
 cd /home/khbayati/gndvae_project/GNet_DVAE
