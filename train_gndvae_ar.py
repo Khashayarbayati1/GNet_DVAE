@@ -19,8 +19,8 @@ import torch.optim as optim
 import configparser
 from model.storn import build_STORN  # Import the STORN builder
 
-from dataset.utils.mat_to_npy_animator import MATConverterAnimator
-from dataset.utils.ar_model import ARModel
+# from data_preparation.utils.mat_to_npy_animator import MATConverterAnimator
+from data_preparation.utils.ar_model import ARModel
 
 import importlib
 from model import gndvae
@@ -137,25 +137,25 @@ class STORNTrainer:
 
         # return self.train_data, self.val_data, self.test_data
 
-    def load_RAF_data(self):
-        """Loads and splits the RAF dataset from a .mat file."""
-        from dataset.utils.mat_to_npy_animator import MATConverterAnimator
+    # def load_RAF_data(self):
+    #     """Loads and splits the RAF dataset from a .mat file."""
+    #     from dataset.utils.mat_to_npy_animator import MATConverterAnimator
         
-        current_directory = os.path.dirname(os.path.abspath(__file__))
-        mat_file_path = os.path.abspath(os.path.join(current_directory, '..', 'RAF_data', 'RAF_data.mat'))
+    #     current_directory = os.path.dirname(os.path.abspath(__file__))
+    #     mat_file_path = os.path.abspath(os.path.join(current_directory, '..', 'RAF_data', 'RAF_data.mat'))
 
-        mat_data_reader = MATConverterAnimator()
-        RAF_data = mat_data_reader.load_and_convert(mat_file_path)
+    #     mat_data_reader = MATConverterAnimator()
+    #     RAF_data = mat_data_reader.load_and_convert(mat_file_path)
 
-        # Transpose and split dataset
-        RAF_data = RAF_data.transpose(2, 0, 1)  # (1690, 61, 121)
-        self.train_data, temp_data = train_test_split(RAF_data, test_size=0.3, shuffle=False)
-        self.val_data, self.test_data = train_test_split(temp_data, test_size=0.5, shuffle=False)
+    #     # Transpose and split dataset
+    #     RAF_data = RAF_data.transpose(2, 0, 1)  # (1690, 61, 121)
+    #     self.train_data, temp_data = train_test_split(RAF_data, test_size=0.3, shuffle=False)
+    #     self.val_data, self.test_data = train_test_split(temp_data, test_size=0.5, shuffle=False)
 
-        # Transpose back to original shape
-        self.train_data = self.train_data.transpose(1, 2, 0)
-        self.val_data = self.val_data.transpose(1, 2, 0)
-        self.test_data = self.test_data.transpose(1, 2, 0)
+    #     # Transpose back to original shape
+    #     self.train_data = self.train_data.transpose(1, 2, 0)
+    #     self.val_data = self.val_data.transpose(1, 2, 0)
+    #     self.test_data = self.test_data.transpose(1, 2, 0)
 
         # return self.train_data, self.val_data, self.test_data
     
@@ -379,7 +379,7 @@ class STORNTrainer:
                 patience_counter = 0
                 # Define the current directory and save path
                 current_directory = os.path.dirname(os.path.abspath(__file__))
-                saved_path = os.path.join(current_directory, "saved_models", "best_model_nov_18.pth")
+                saved_path = os.path.join(current_directory, "saved_models", "best_model_nov_19.pth")
                 # Save the model's state_dict to the specified path
                 torch.save(unwrap_model(self.model).state_dict(), saved_path)
                 print("Saved best model.")
@@ -417,7 +417,7 @@ class STORNTrainer:
 
     def load_checkpoint(self):
         current_directory = os.path.dirname(os.path.abspath(__file__))
-        checkpoint_path = os.path.join(current_directory, "saved_models", "best_model.pth")
+        checkpoint_path = os.path.join(current_directory, "saved_models", "best_model_nov_19.pth")
         
         if os.path.exists(checkpoint_path):
             # Use unwrap_model to handle DataParallel
@@ -515,7 +515,7 @@ if __name__ == "__main__":
     # Load and preprocess data
     trainer_class.load_and_prepare_data()
     
-    Training_phase = False
+    Training_phase = True
     if Training_phase:
         # Train the model
         trainer_class.train()
