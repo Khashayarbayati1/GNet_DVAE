@@ -2,7 +2,7 @@
 #SBATCH --job-name=gndvae          # Job name
 #SBATCH --output=train_gndvae-%j.out  # Standard output log file (%j = JobID)
 #SBATCH --error=train_gndvae-%j.err   # Standard error log file
-#SBATCH --time=02:00:00             # Time limit (hh:mm:ss)
+#SBATCH --time=08:00:00             # Time limit (hh:mm:ss)
 #SBATCH --ntasks=1                  # Number of tasks
 #SBATCH --cpus-per-task=16          # Increase CPUs to support multiple GPUs
 #SBATCH --mem=64G                   # Increase memory for larger data processing
