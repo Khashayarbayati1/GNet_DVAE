@@ -55,6 +55,8 @@ def get_device(config):
     """Sets the device for computation."""
     return 'cuda' if torch.cuda.is_available() and config.getboolean('Training', 'use_cuda') else 'cpu'
 
+def unwrap_model(model):
+    return model.module if isinstance(model, torch.nn.DataParallel) else model
 
 class STORNTrainer:
     def __init__(self, data_name, model, config, device='cpu'):
@@ -324,7 +326,7 @@ class STORNTrainer:
         early_stop_patience = self.config.getint('Training', 'early_stop_patience')
 
         # Initialize optimizer
-        optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        optimizer = optim.Adam(unwrap_model(self.model).parameters(), lr=lr)
         
         # Track validation loss for early stopping
         best_val_loss = float('inf')
@@ -345,15 +347,18 @@ class STORNTrainer:
                 reconstructed, z_mean, z_logvar, _ = self.model(encoder_input, decoder_input)
 
                 # Calculate loss
-                loss_tot, loss_recon, loss_KLD = self.model.get_loss(target_output, reconstructed, z_mean, z_logvar, 
-                                                                seq_len=encoder_input.size(1), 
-                                                                batch_size=encoder_input.size(0), 
-                                                                beta=self.beta, lambda_l1=0.001)
+                loss_tot, loss_recon, loss_KLD = unwrap_model(self.model).get_loss(
+                    target_output, reconstructed, z_mean, z_logvar, 
+                    seq_len=encoder_input.size(1), 
+                    batch_size=encoder_input.size(0), 
+                    beta=self.beta
+                )
+
                 # Backward pass and optimize
                 optimizer.zero_grad()
                 loss_tot.backward()
                 # Clip gradients to prevent exploding gradients
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(unwrap_model(self.model).parameters(), max_norm=1.0)
 
                 optimizer.step()
 
@@ -374,9 +379,9 @@ class STORNTrainer:
                 patience_counter = 0
                 # Define the current directory and save path
                 current_directory = os.path.dirname(os.path.abspath(__file__))
-                saved_path = os.path.join(current_directory, "saved_models", "best_model.pth")
+                saved_path = os.path.join(current_directory, "saved_models", "best_model_nov_18.pth")
                 # Save the model's state_dict to the specified path
-                torch.save(self.model.state_dict(), saved_path)
+                torch.save(unwrap_model(self.model).state_dict(), saved_path)
                 print("Saved best model.")
             else:
                 patience_counter += 1
@@ -397,10 +402,12 @@ class STORNTrainer:
                 reconstructed, z_mean, z_logvar, _ = self.model(encoder_input, decoder_input)
 
                 # Calculate loss
-                loss_tot, _, _ = self.model.get_loss(target_output, reconstructed, z_mean, z_logvar, 
-                                                seq_len=encoder_input.size(1), 
-                                                batch_size=encoder_input.size(0), 
-                                                beta=self.beta, lambda_l1=0.001)
+                loss_tot, _, _ = unwrap_model(self.model).get_loss(
+                    target_output, reconstructed, z_mean, z_logvar, 
+                    seq_len=encoder_input.size(1), 
+                    batch_size=encoder_input.size(0), 
+                    beta=self.beta
+                )
                 total_val_loss += loss_tot.item()
 
         return total_val_loss / len(self.val_loader)
@@ -411,11 +418,14 @@ class STORNTrainer:
     def load_checkpoint(self):
         current_directory = os.path.dirname(os.path.abspath(__file__))
         checkpoint_path = os.path.join(current_directory, "saved_models", "best_model.pth")
+        
         if os.path.exists(checkpoint_path):
-            self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device, weights_only=True))
+            # Use unwrap_model to handle DataParallel
+            unwrap_model(self.model).load_state_dict(torch.load(checkpoint_path, map_location=self.device))
             print("Checkpoint loaded successfully.")
         else:
             print("No checkpoint found. Please check the saved path or run training first.")
+
 
     def test(self):
         self.model.eval()
@@ -433,10 +443,12 @@ class STORNTrainer:
                 reconstructed, z_mean, z_logvar, attention_weights = self.model(encoder_input, decoder_input)
 
                 # Calculate loss
-                loss_tot, loss_recon, loss_KLD = self.model.get_loss(target_output, reconstructed, z_mean, z_logvar, 
-                                                                seq_len=encoder_input.size(1), 
-                                                                batch_size=encoder_input.size(0), 
-                                                                beta=self.beta, lambda_l1=0.001)
+                loss_tot, loss_recon, loss_KLD = unwrap_model(self.model).get_loss(
+                    target_output, reconstructed, z_mean, z_logvar, 
+                    seq_len=encoder_input.size(1), 
+                    batch_size=encoder_input.size(0), 
+                    beta=self.beta
+                )
                 total_test_loss += loss_tot.item()
 
                 # Store results for analysis
@@ -483,7 +495,15 @@ if __name__ == "__main__":
         activation=config.get('Network', 'activation'),
         dropout_p=config.getfloat('Network', 'dropout_p'),
         device=device
-    ).to(device)
+    )
+    
+    # Enable multi-GPU training if available
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs.")
+        model = torch.nn.DataParallel(model)
+
+    # Move the model to the selected device
+    model = model.to(device)
     
     tau = config.getint('DataFrame', 'sequence_len')
     x_dim = config.getint('Network', 'x_dim')
@@ -503,23 +523,23 @@ if __name__ == "__main__":
         # Load the model
         trainer_class.load_checkpoint()
         
-    trained_influence_matrices = torch.zeros(tau, x_dim, x_dim + z_dim, dense_z_s[0])
-    for i in range(x_dim):  # Loop over target features
-        for k in range(tau):  # Loop over lags
-            trained_influence_matrices[k, i, :, :] = model.decoder.intermediate_layers[i][k].weight.T
+    # trained_influence_matrices = torch.zeros(tau, x_dim, x_dim + z_dim, dense_z_s[0])
+    # for i in range(x_dim):  # Loop over target features
+    #     for k in range(tau):  # Loop over lags
+    #         trained_influence_matrices[k, i, :, :] = model.decoder.intermediate_layers[i][k].weight.T
     
-    influence_matrix = torch.norm(trained_influence_matrices, p=2, dim=3)  # Shape: [100, 16, 48]
+    # influence_matrix = torch.norm(trained_influence_matrices, p=2, dim=3)  # Shape: [100, 16, 48]
     
-    influence_matrix_sum = torch.sum(influence_matrix[0:10], dim=0)  # Shape: [16, 48]
-    influence_matrix_max = torch.max(influence_matrix, dim=0).values  # Take the max over lags
-    threshold = 0  # Adjust based on analysis
-    influence_matrix_thresholded = influence_matrix_sum.clone()
-    influence_matrix_thresholded[influence_matrix_sum < threshold] = 0
+    # influence_matrix_sum = torch.sum(influence_matrix[0:10], dim=0)  # Shape: [16, 48]
+    # influence_matrix_max = torch.max(influence_matrix, dim=0).values  # Take the max over lags
+    # threshold = 0  # Adjust based on analysis
+    # influence_matrix_thresholded = influence_matrix_sum.clone()
+    # influence_matrix_thresholded[influence_matrix_sum < threshold] = 0
     
-    input_feature_influence = influence_matrix_thresholded[:, :16].T  # Shape: [16, 16]
-    plt.show()
-    sns.heatmap(input_feature_influence.detach().cpu().numpy(), cmap="Blues", cbar=True)
-    plt.xlabel("Input Features (Sources)")
-    plt.ylabel("Target Features")
-    plt.title("Influence of Input Features on Targets")
-    plt.show()
+    # input_feature_influence = influence_matrix_thresholded[:, :16].T  # Shape: [16, 16]
+    # plt.show()
+    # sns.heatmap(input_feature_influence.detach().cpu().numpy(), cmap="Blues", cbar=True)
+    # plt.xlabel("Input Features (Sources)")
+    # plt.ylabel("Target Features")
+    # plt.title("Influence of Input Features on Targets")
+    # plt.show()
